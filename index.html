@@ -1,0 +1,1682 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>IPMI Send Calendar</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --purple: #7F77DD;
+      --purple-dark: #5e55c4;
+      --purple-soft: #f0eefc;
+      --ink: #1a1a2e;
+      --ink-soft: #4a4a5e;
+      --muted: #8a8a9a;
+      --line: #ececf1;
+      --bg: #ffffff;
+      --bg-soft: #fafafd;
+      --warn: #d85a30;
+      --warn-soft: #fdece4;
+      --amber: #ba7517;
+      --amber-soft: #fbf2e0;
+      --shadow-sm: 0 1px 2px rgba(20,20,40,.04);
+      --shadow-md: 0 4px 16px rgba(20,20,40,.06);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      color: var(--ink);
+      background: var(--bg);
+      font-size: 14px;
+      line-height: 1.45;
+      -webkit-font-smoothing: antialiased;
+    }
+    button { font-family: inherit; cursor: pointer; }
+
+    /* ---------- Password gate ---------- */
+    .gate {
+      position: fixed;
+      inset: 0;
+      background: var(--bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+    .gate-card {
+      width: 360px;
+      max-width: calc(100% - 32px);
+      padding: 32px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      box-shadow: var(--shadow-md);
+    }
+    .gate-card h1 {
+      margin: 0 0 4px;
+      font-size: 18px;
+      font-weight: 600;
+    }
+    .gate-card p {
+      margin: 0 0 20px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .gate-card label {
+      display: block;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--ink-soft);
+      margin-bottom: 6px;
+    }
+    .gate-card input {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      font-size: 14px;
+      font-family: inherit;
+      outline: none;
+      transition: border-color .15s, box-shadow .15s;
+    }
+    .gate-card input:focus {
+      border-color: var(--purple);
+      box-shadow: 0 0 0 3px var(--purple-soft);
+    }
+    .gate-card button {
+      width: 100%;
+      margin-top: 12px;
+      padding: 10px;
+      background: var(--purple);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      transition: background .15s;
+    }
+    .gate-card button:hover { background: var(--purple-dark); }
+    .gate-error {
+      display: none;
+      margin-top: 10px;
+      font-size: 12px;
+      color: var(--warn);
+    }
+    .gate-error.show { display: block; }
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      20%, 60% { transform: translateX(-6px); }
+      40%, 80% { transform: translateX(6px); }
+    }
+    .shake { animation: shake .35s; }
+
+    /* ---------- App layout ---------- */
+    .app { display: none; }
+    .app.show { display: block; }
+
+    .container {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 24px 28px 60px;
+    }
+
+    /* Header */
+    header.app-header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--line);
+      margin-bottom: 24px;
+    }
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .logo-mark {
+      width: 28px; height: 28px;
+      background: var(--purple);
+      border-radius: 7px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 700;
+      font-size: 13px;
+    }
+    .logo h1 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+    .header-spacer { flex: 1; }
+
+    .header-controls {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .filter-select {
+      padding: 8px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: white;
+      font-size: 13px;
+      font-family: inherit;
+      color: var(--ink);
+      cursor: pointer;
+      min-width: 200px;
+      outline: none;
+    }
+    .filter-select:focus {
+      border-color: var(--purple);
+      box-shadow: 0 0 0 3px var(--purple-soft);
+    }
+    .btn-refresh {
+      padding: 8px 14px;
+      background: white;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--ink);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: background .15s, border-color .15s;
+    }
+    .btn-refresh:hover {
+      background: var(--bg-soft);
+      border-color: var(--purple);
+    }
+    .btn-refresh:disabled {
+      opacity: .55;
+      cursor: not-allowed;
+    }
+    .btn-refresh .spin {
+      display: inline-block;
+      width: 12px; height: 12px;
+      border: 2px solid var(--line);
+      border-top-color: var(--purple);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Loading bar */
+    .loading-bar {
+      display: none;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 14px;
+      background: var(--purple-soft);
+      border-radius: 8px;
+      margin-bottom: 20px;
+      font-size: 13px;
+      color: var(--ink-soft);
+    }
+    .loading-bar.show { display: flex; }
+    .loading-bar-fill {
+      flex: 1;
+      height: 6px;
+      background: white;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .loading-bar-fill > div {
+      height: 100%;
+      background: var(--purple);
+      width: 0%;
+      transition: width .25s;
+    }
+
+    /* Error banner */
+    .error-banner {
+      display: none;
+      padding: 12px 14px;
+      background: var(--warn-soft);
+      border: 1px solid #f5c4af;
+      border-radius: 8px;
+      color: #8a3818;
+      margin-bottom: 20px;
+      font-size: 13px;
+    }
+    .error-banner.show { display: block; }
+
+    /* Stat bar */
+    .stat-bar {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .stat {
+      padding: 14px 16px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--bg-soft);
+    }
+    .stat-label {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 4px;
+    }
+    .stat-value {
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--ink);
+      line-height: 1.1;
+    }
+    .stat-sub {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+    .stat.warn .stat-value { color: var(--warn); }
+
+    /* Calendar */
+    .calendar-wrap {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      overflow: hidden;
+      background: white;
+    }
+    .calendar-nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--line);
+    }
+    .calendar-month {
+      font-size: 15px;
+      font-weight: 600;
+    }
+    .nav-arrows {
+      display: flex;
+      gap: 4px;
+    }
+    .nav-arrows button, .btn-today {
+      background: white;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 6px 10px;
+      font-size: 13px;
+      color: var(--ink-soft);
+      transition: background .15s;
+    }
+    .nav-arrows button:hover, .btn-today:hover {
+      background: var(--bg-soft);
+    }
+
+    .calendar-weekdays {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      background: var(--bg-soft);
+      border-bottom: 1px solid var(--line);
+    }
+    .calendar-weekdays > div {
+      padding: 8px 12px;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .calendar-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+    }
+    .day {
+      min-height: 100px;
+      border-right: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      padding: 8px 10px;
+      position: relative;
+      cursor: pointer;
+      transition: background .12s;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .day:nth-child(7n) { border-right: none; }
+    .day:hover { background: var(--bg-soft); }
+    .day.other-month { background: #fcfcfd; color: var(--muted); }
+    .day.other-month:hover { background: var(--bg-soft); }
+    .day.today .day-num {
+      background: var(--purple);
+      color: white;
+      width: 22px; height: 22px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+    }
+    .day.selected {
+      background: var(--purple-soft);
+    }
+    .day-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .day-num {
+      font-size: 13px;
+      font-weight: 500;
+    }
+    .day-count {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--purple);
+    }
+    .day-count.zero { color: var(--muted); font-weight: 400; }
+    .day-events {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 3px;
+      margin-top: auto;
+    }
+    .event-dot {
+      width: 8px; height: 8px;
+      border-radius: 2px;
+    }
+    .overload-flag {
+      position: absolute;
+      top: 6px; right: 6px;
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--warn);
+      box-shadow: 0 0 0 2px white;
+    }
+
+    /* Day detail panel */
+    .day-panel {
+      display: none;
+      margin-top: 18px;
+      padding: 20px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: white;
+    }
+    .day-panel.show { display: block; }
+    .day-panel-header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--line);
+    }
+    .day-panel-header h2 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 600;
+    }
+    .day-panel-header .total {
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .day-panel-close {
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 18px;
+      padding: 0 4px;
+      line-height: 1;
+    }
+    .day-panel-empty {
+      padding: 30px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .rep-row {
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .rep-row:last-child { border-bottom: none; }
+    .rep-row.warn {
+      background: var(--warn-soft);
+      border-radius: 8px;
+      padding: 12px;
+      margin: 6px 0;
+      border: 1px solid #f5c4af;
+    }
+    .rep-avatar {
+      width: 34px; height: 34px;
+      border-radius: 50%;
+      background: var(--purple);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      font-size: 12px;
+      flex-shrink: 0;
+    }
+    .rep-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .rep-name {
+      font-weight: 600;
+      font-size: 14px;
+      margin-bottom: 2px;
+    }
+    .rep-meta {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    .rep-warn {
+      display: inline-block;
+      margin-left: 8px;
+      padding: 1px 6px;
+      background: var(--warn);
+      color: white;
+      font-size: 10px;
+      font-weight: 600;
+      border-radius: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      vertical-align: middle;
+    }
+    .pill-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 8px;
+      background: var(--bg-soft);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      font-size: 12px;
+      color: var(--ink-soft);
+    }
+    .pill.breakup {
+      background: var(--amber-soft);
+      border-color: #ecd098;
+      color: #7a4d10;
+    }
+    .pill .pill-count {
+      font-weight: 600;
+      color: var(--ink);
+    }
+    .pill.breakup .pill-count { color: #7a4d10; }
+    .event-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 6px;
+    }
+    .event-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      color: var(--ink-soft);
+    }
+    .event-tag .event-dot {
+      width: 7px; height: 7px;
+    }
+
+    /* Footer note */
+    .foot {
+      text-align: center;
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 30px;
+    }
+
+    @media (max-width: 760px) {
+      .stat-bar { grid-template-columns: repeat(2, 1fr); }
+      .day { min-height: 70px; padding: 6px; }
+      .day-num { font-size: 12px; }
+      .container { padding: 16px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Password gate -->
+  <div class="gate" id="gate">
+    <div class="gate-card" id="gateCard">
+      <h1>IPMI Send Calendar</h1>
+      <p>Enter the team password to continue.</p>
+      <label for="gatePw">Password</label>
+      <input type="password" id="gatePw" autocomplete="off" autofocus />
+      <button id="gateBtn">Enter</button>
+      <div class="gate-error" id="gateError">Incorrect password.</div>
+    </div>
+  </div>
+
+  <!-- App -->
+  <div class="app" id="app">
+    <div class="container">
+
+      <header class="app-header">
+        <div class="logo">
+          <div class="logo-mark">I</div>
+          <h1>IPMI Send Calendar</h1>
+        </div>
+        <div class="header-spacer"></div>
+        <div class="header-controls">
+          <select class="filter-select" id="filterSelect">
+            <option value="all">All reps</option>
+          </select>
+          <button class="btn-refresh" id="refreshBtn">
+            <span id="refreshIcon">↻</span>
+            <span>Refresh</span>
+          </button>
+        </div>
+      </header>
+
+      <div class="loading-bar" id="loadingBar">
+        <span id="loadingText">Loading…</span>
+        <div class="loading-bar-fill"><div id="loadingFill"></div></div>
+      </div>
+
+      <div class="error-banner" id="errorBanner"></div>
+
+      <div class="stat-bar">
+        <div class="stat">
+          <div class="stat-label">Projected sends</div>
+          <div class="stat-value" id="statSends">—</div>
+          <div class="stat-sub" id="statSendsSub">in this month</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Peak day</div>
+          <div class="stat-value" id="statPeak">—</div>
+          <div class="stat-sub" id="statPeakSub">&nbsp;</div>
+        </div>
+        <div class="stat" id="statOverloadCard">
+          <div class="stat-label">Overload days</div>
+          <div class="stat-value" id="statOverload">—</div>
+          <div class="stat-sub">rep ≥125 sends</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Active sequences</div>
+          <div class="stat-value" id="statActive">—</div>
+          <div class="stat-sub">deals in-sequence</div>
+        </div>
+      </div>
+
+      <div class="calendar-wrap">
+        <div class="calendar-nav">
+          <div class="calendar-month" id="calMonth">—</div>
+          <div class="nav-arrows">
+            <button id="prevMonth">←</button>
+            <button class="btn-today" id="todayBtn">Today</button>
+            <button id="nextMonth">→</button>
+          </div>
+        </div>
+        <div class="calendar-weekdays">
+          <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+        </div>
+        <div class="calendar-grid" id="calGrid"></div>
+      </div>
+
+      <div class="day-panel" id="dayPanel"></div>
+
+      <details id="debugPanel" style="margin-top: 20px; padding: 12px; background: #f5f5f7; border-radius: 8px; font-family: ui-monospace, monospace; font-size: 12px;">
+        <summary style="cursor: pointer; font-weight: 600;">Debug info (click to expand)</summary>
+        <pre id="debugContent" style="margin: 10px 0 0; white-space: pre-wrap; word-break: break-all;"></pre>
+      </details>
+
+      <div class="foot">Day 0 = "LinkedIn Sent Date" deal field &middot; sequence offsets +0/+1/+4/+5/+8/+15/+22</div>
+    </div>
+  </div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ---------- Config ----------
+  const PASSWORD = 'IPMI2026';
+  const STORAGE_AUTH = 'ipmi_cal_auth_v1';
+  const STORAGE_CACHE = 'ipmi_cal_cache_v1';
+  const PROXY = '/api/ac';
+
+  const SEQUENCE = [
+    { offset: 0,  label: 'Email 1',    breakup: false },
+    { offset: 1,  label: 'Email 2',    breakup: false },
+    { offset: 4,  label: 'Email 3',    breakup: false },
+    { offset: 5,  label: 'Email 4',    breakup: false },
+    { offset: 8,  label: 'Email 5',    breakup: false },
+    { offset: 15, label: 'Breakup 1',  breakup: true  },
+    { offset: 22, label: 'Breakup 2',  breakup: true  },
+  ];
+
+  const VALID_EVENTS = new Set([
+    'EHS New Orleans | Jan 25-27',
+    'HRMI New Orleans | Feb 22-24',
+    'HGC Amelia Island | Feb 22-24',
+    'HCHR Carlsbad | Mar 15-17',
+    'CLDI Carlsbad | Mar 22-24',
+    'HFI Orlando | Apr 12-14',
+    'HRCAN Muskoka | Apr 26-28',
+    'TAI Los Angeles | May 17-19',
+    'TAI Muskoka | May 31-Jun 2',
+    'HIT Los Angeles | Jun 7-9',
+    'HRMI Carlsbad | Jun 7-9',
+    'EHS Nashville | Jul 26-28',
+    'CLDI New Orleans | Sept 13-15',
+    'HCHR Orlando | Sept 13-15',
+    'HGC Carlsbad | Oct 4-6',
+    'IP LAW Los Angeles | Oct 18-20',
+    'HRMI Orlando | Oct 18-20',
+    'CNI Nashville | Nov 8-10',
+    'HRCAN Banff Springs | Nov 8-10',
+    'CWI Amelia Island | Nov 8-10',
+  ]);
+
+  const COLOR_PALETTE = [
+    '#1D9E75', '#7F77DD', '#378ADD', '#D85A30',
+    '#BA7517', '#D4537E', '#639922', '#0F6E56',
+    '#185FA5', '#993C1D', '#534AB7', '#D4537E',
+  ];
+
+  const EVENT_FIELD_LABEL = '0. 2026 Event List';
+  const LINKEDIN_FIELD_LABEL = '1. LinkedIn Connection / InMail Sent';
+  const LINKEDIN_DATE_FIELD_LABEL = 'LinkedIn Sent Date';
+  const PIPELINE_ID = 191; // 2026 Events (EHS) — only pull deals from this pipeline
+  const OVERLOAD_THRESHOLD = 125;
+  const FETCH_CONCURRENCY = 3;
+
+  // ---------- State ----------
+  const state = {
+    deals: [],         // [{id, ownerId, eventName, day0Date}]
+    repsById: {},      // {userId: {firstName, lastName, email, fullName, initials}}
+    eventColors: {},   // {eventName: '#RRGGBB'}
+    activeSequences: 0,
+    viewYear: 0,
+    viewMonth: 0,      // 0-indexed
+    selectedDateKey: null,
+    filter: 'all',
+  };
+
+  // ---------- Debug helper ----------
+  // Mirrors all our diagnostic output to a visible panel on the page,
+  // because browser consoles can swallow / collapse output unpredictably.
+  function debug(...args) {
+    const line = args.map(a => {
+      if (typeof a === 'string') return a;
+      try { return JSON.stringify(a); } catch (e) { return String(a); }
+    }).join(' ');
+    console.log('[IPMI Calendar]', ...args);
+    const el = document.getElementById('debugContent');
+    if (el) {
+      el.textContent += line + '\n';
+      // Auto-expand on first write
+      const panel = document.getElementById('debugPanel');
+      if (panel && !panel.open) panel.open = true;
+    }
+  }
+
+  // ---------- Utilities ----------
+  function ymdKey(d) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const da = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${da}`;
+  }
+  function parseDateOnly(s) {
+    // Accept ISO timestamps; build a local-time Date based on Y/M/D portion only
+    if (!s) return null;
+    const m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!m) {
+      const dt = new Date(s);
+      if (isNaN(dt)) return null;
+      return new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
+    }
+    return new Date(parseInt(m[1],10), parseInt(m[2],10) - 1, parseInt(m[3],10));
+  }
+  function addDays(d, n) {
+    const c = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    c.setDate(c.getDate() + n);
+    return c;
+  }
+  function initials(first, last) {
+    const a = (first || '').trim().charAt(0).toUpperCase();
+    const b = (last  || '').trim().charAt(0).toUpperCase();
+    return (a + b) || '?';
+  }
+  function fmtMonth(y, m) {
+    const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    return `${months[m]} ${y}`;
+  }
+  function fmtFullDate(d) {
+    const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    return `${days[d.getDay()]}, ${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+  }
+
+  // ---------- API helpers ----------
+  function normalizeLabel(s) {
+    return String(s || '')
+      .replace(/\s+/g, ' ')           // collapse whitespace
+      .replace(/[\u2013\u2014]/g, '-') // en/em dash → hyphen
+      .replace(/[\u2018\u2019]/g, "'") // smart single quotes → straight
+      .replace(/[\u201C\u201D]/g, '"') // smart double quotes → straight
+      .trim()
+      .toLowerCase();
+  }
+
+  async function apiGet(path, attempt = 0) {
+    const url = `${PROXY}?path=${encodeURIComponent(path)}`;
+    let res;
+    try {
+      res = await fetch(url);
+    } catch (err) {
+      // Network error — retry up to 3 times
+      if (attempt < 3) {
+        await sleep(800 * Math.pow(2, attempt));
+        return apiGet(path, attempt + 1);
+      }
+      throw err;
+    }
+
+    if (res.status === 429 || res.status === 503 || res.status === 504) {
+      // Rate-limited or upstream timeout — back off and retry
+      if (attempt < 5) {
+        const wait = 1500 * Math.pow(2, attempt); // 1.5s, 3s, 6s, 12s, 24s
+        await sleep(wait);
+        return apiGet(path, attempt + 1);
+      }
+    }
+
+    if (!res.ok) {
+      let detail = '';
+      try { detail = await res.text(); } catch (e) {}
+      throw new Error(`API ${res.status}: ${detail.slice(0, 200)}`);
+    }
+    return res.json();
+  }
+
+  function sleep(ms) {
+    return new Promise(r => setTimeout(r, ms));
+  }
+
+  async function paginate(basePath, arrayKey) {
+    const out = [];
+    const limit = 100;
+    let offset = 0;
+    while (true) {
+      const sep = basePath.includes('?') ? '&' : '?';
+      const path = `${basePath}${sep}limit=${limit}&offset=${offset}`;
+      const data = await apiGet(path);
+      const chunk = data[arrayKey] || [];
+      out.push(...chunk);
+      if (chunk.length < limit) break;
+      offset += limit;
+      if (offset > 50000) break; // safety
+    }
+    return out;
+  }
+
+  // Like paginate, but also collects sideloaded "included" arrays returned alongside the main array.
+  // AC returns sideloaded resources as top-level keys parallel to the main one (e.g. dealCustomFieldData).
+  async function paginateWithIncludes(basePath, arrayKey, debugLog) {
+    const records = [];
+    const included = {}; // key -> array
+    const limit = 100;
+    let offset = 0;
+    let firstPage = true;
+    while (true) {
+      const sep = basePath.includes('?') ? '&' : '?';
+      const path = `${basePath}${sep}limit=${limit}&offset=${offset}`;
+      const data = await apiGet(path);
+      if (firstPage && debugLog) {
+        debugLog('paginateWithIncludes top-level keys for ' + basePath + ': ' + JSON.stringify(Object.keys(data)));
+        firstPage = false;
+      }
+      const chunk = data[arrayKey] || [];
+      records.push(...chunk);
+      Object.keys(data).forEach(k => {
+        if (k === arrayKey) return;
+        if (Array.isArray(data[k])) {
+          if (!included[k]) included[k] = [];
+          included[k].push(...data[k]);
+        }
+      });
+      if (chunk.length < limit) break;
+      offset += limit;
+      if (offset > 50000) break;
+    }
+    return { records, included };
+  }
+
+  // Run async tasks with a concurrency cap. Adds a small delay between requests
+  // to stay under AC's ~5 req/sec rate limit even at low concurrency.
+  async function runWithConcurrency(items, worker, concurrency, onProgress) {
+    const results = new Array(items.length);
+    let nextIndex = 0;
+    let completed = 0;
+
+    async function runner() {
+      while (true) {
+        const i = nextIndex++;
+        if (i >= items.length) return;
+        try {
+          results[i] = await worker(items[i], i);
+        } catch (err) {
+          results[i] = null;
+        }
+        completed++;
+        if (onProgress) onProgress(completed, items.length);
+        // Tiny delay between requests on the same runner — keeps total throughput modest
+        await sleep(150);
+      }
+    }
+    const runners = [];
+    const n = Math.min(concurrency, items.length);
+    for (let k = 0; k < n; k++) runners.push(runner());
+    await Promise.all(runners);
+    return results;
+  }
+
+  // ---------- Data load ----------
+  function setLoading(show, text, pct) {
+    const bar = document.getElementById('loadingBar');
+    const t = document.getElementById('loadingText');
+    const f = document.getElementById('loadingFill');
+    if (!show) { bar.classList.remove('show'); return; }
+    bar.classList.add('show');
+    if (text) t.textContent = text;
+    if (typeof pct === 'number') f.style.width = `${Math.min(100, Math.max(0, pct))}%`;
+  }
+  function showError(msg) {
+    const b = document.getElementById('errorBanner');
+    if (!msg) { b.classList.remove('show'); b.textContent = ''; return; }
+    b.classList.add('show');
+    b.textContent = msg;
+  }
+
+  async function loadAll(forceRefresh) {
+    showError('');
+    setLoading(true, 'Loading…', 0);
+    document.getElementById('refreshBtn').disabled = true;
+    document.getElementById('refreshIcon').innerHTML = '<span class="spin"></span>';
+
+    try {
+      // Try cache first
+      if (!forceRefresh) {
+        const cached = readCache();
+        if (cached) {
+          applyData(cached);
+          setLoading(false);
+          document.getElementById('refreshBtn').disabled = false;
+          document.getElementById('refreshIcon').textContent = '↻';
+          return;
+        }
+      }
+
+      // 1) Custom field metadata
+      setLoading(true, 'Loading custom field metadata…', 5);
+      const meta = await apiGet('/dealCustomFieldMeta?limit=200');
+      const fields = meta.dealCustomFieldMeta || [];
+      const eventField = fields.find(f =>
+        normalizeLabel(f.fieldLabel || f.personalization || '') === normalizeLabel(EVENT_FIELD_LABEL)
+      );
+      const linkedinField = fields.find(f =>
+        normalizeLabel(f.fieldLabel || f.personalization || '') === normalizeLabel(LINKEDIN_FIELD_LABEL)
+      );
+      const linkedinDateField = fields.find(f =>
+        normalizeLabel(f.fieldLabel || f.personalization || '') === normalizeLabel(LINKEDIN_DATE_FIELD_LABEL)
+      );
+      if (!eventField || !linkedinField || !linkedinDateField) {
+        const labels = fields
+          .map(f => `"${(f.fieldLabel || f.personalization || '').trim()}"`)
+          .filter(Boolean)
+          .sort();
+        console.warn('Available deal field labels:', labels);
+        const missing = [];
+        if (!eventField) missing.push(`"${EVENT_FIELD_LABEL}"`);
+        if (!linkedinField) missing.push(`"${LINKEDIN_FIELD_LABEL}"`);
+        if (!linkedinDateField) missing.push(`"${LINKEDIN_DATE_FIELD_LABEL}"`);
+        throw new Error(
+          `Custom deal field${missing.length > 1 ? 's' : ''} ${missing.join(' and ')} not found. ` +
+          `Available labels (also logged to browser console): ${labels.join(', ')}`
+        );
+      }
+
+      // 2) Users — use a generous page; filter out non-rep system users by joining on deals later
+      setLoading(true, 'Loading users…', 10);
+      const allUsers = await paginate('/users', 'users');
+      const userMap = {};
+      allUsers.forEach(u => {
+        userMap[String(u.id)] = {
+          id: String(u.id),
+          firstName: u.firstName || '',
+          lastName: u.lastName || '',
+          email: u.email || '',
+          fullName: ((u.firstName || '') + ' ' + (u.lastName || '')).trim() || (u.email || `User ${u.id}`),
+          initials: initials(u.firstName, u.lastName),
+        };
+      });
+
+      // 2.5) List pipelines so we can see which IDs exist and confirm the target.
+      setLoading(true, 'Loading pipelines…', 12);
+      const pipelinesResp = await apiGet('/dealGroups?limit=100');
+      const pipelines = pipelinesResp.dealGroups || [];
+      debug('Pipelines available in this account:');
+      pipelines.forEach(p => {
+        console.log(`  - id=${p.id}  title="${p.title}"`);
+      });
+      const targetPipeline = pipelines.find(p => String(p.id) === String(PIPELINE_ID));
+      if (!targetPipeline) {
+        const list = pipelines.map(p => `id=${p.id} "${p.title}"`).join('; ');
+        throw new Error(
+          `Pipeline ID ${PIPELINE_ID} not found. Available pipelines (also in browser console): ${list}`
+        );
+      }
+      debug(`Target pipeline confirmed: id=${targetPipeline.id} title="${targetPipeline.title}"`);
+
+      // 3) Get the stages that belong to our target pipeline.
+      // AC v3 reliably supports filters[stage] but not filters[group] on /deals,
+      // so we use the stage list as a proxy for "deals in this pipeline".
+      setLoading(true, 'Loading pipeline stages…', 14);
+      const stagesResp = await apiGet(`/dealStages?filters[d_groupid]=${PIPELINE_ID}&limit=100`);
+      const pipelineStages = stagesResp.dealStages || [];
+      debug(`Pipeline ${PIPELINE_ID} has ${pipelineStages.length} stages.`);
+
+      if (pipelineStages.length === 0) {
+        // Fallback: list all stages and filter client-side. Some accounts don't honor d_groupid filter.
+        const allStagesResp = await paginate('/dealStages', 'dealStages');
+        const filtered = allStagesResp.filter(s => String(s.group) === String(PIPELINE_ID));
+        debug(`Fallback: scanned ${allStagesResp.length} total stages, found ${filtered.length} in pipeline ${PIPELINE_ID}.`);
+        if (filtered.length === 0) {
+          throw new Error(`No stages found for pipeline ID ${PIPELINE_ID}. Check that the PIPELINE_ID constant is correct.`);
+        }
+        pipelineStages.push(...filtered);
+      }
+
+      const stageIds = pipelineStages.map(s => String(s.id));
+      debug('Stage IDs to query:', stageIds);
+
+      // 4) Open deals (status=0) in the target pipeline — paginate per stage.
+      // AC's filters[stage] takes a single stage ID, so we run one paginated query per stage and merge.
+      // Each stage typically has far fewer deals than the whole account, keeping responses small.
+      // Use ?include=dealCustomFieldData so field values come back inline.
+      setLoading(true, 'Loading open deals…', 18);
+      const allDealsRecords = [];
+      const allIncluded = [];
+      let stagesDone = 0;
+      for (const sid of stageIds) {
+        const resp = await paginateWithIncludes(
+          `/deals?filters[status]=0&filters[stage]=${sid}`,
+          'deals',
+          debug
+        );
+        allDealsRecords.push(...resp.records);
+        if (resp.included.dealCustomFieldData) {
+          allIncluded.push(...resp.included.dealCustomFieldData);
+        }
+        stagesDone++;
+        const pct = 18 + Math.round((stagesDone / stageIds.length) * 12);
+        setLoading(true, `Loading open deals… (${stagesDone}/${stageIds.length} stages)`, pct);
+      }
+      const deals = allDealsRecords;
+      const includedFieldData = allIncluded;
+
+      debug(`Total open deals in pipeline ${PIPELINE_ID}: ${deals.length}`);
+      if (deals[0]) {
+        debug('Sample deal object keys:', Object.keys(deals[0]));
+        debug('Sample deal.group value:', deals[0].group);
+      }
+
+      // 4) Fetch field values for our 3 target custom fields directly.
+      // Bypass the ?include= sideload — that has been unreliable on this account.
+      // /dealCustomFieldData accepts a filters[fieldid] filter that AC honors server-side.
+      const eventFieldId = String(eventField.id);
+      const linkedinFieldId = String(linkedinField.id);
+      const linkedinDateFieldId = String(linkedinDateField.id);
+
+      setLoading(true, 'Loading custom field values…', 30);
+
+      // Per-deal field fetch. Each /deals/{id}/dealCustomFieldData call is tiny
+      // (just one deal's fields), but we make ~1500 of them. With concurrency 3
+      // and 150ms inter-request delay this stays well under AC's ~5 req/sec limit.
+      // This is more reliable than bulk-paginating /dealCustomFieldData which times
+      // out after ~140 large pages.
+      const eventByDealId = {};
+      const linkedinByDealId = {};
+      const linkedinDateByDealId = {};
+
+      let fieldFetchSampleLogged = false;
+      await runWithConcurrency(
+        deals,
+        async (d) => {
+          try {
+            const r = await apiGet(`/deals/${d.id}/dealCustomFieldData?limit=100`);
+            const fvs = r.dealCustomFieldData || [];
+            if (!fieldFetchSampleLogged && fvs.length > 0) {
+              fieldFetchSampleLogged = true;
+              debug(`Sample per-deal field response: deal=${d.id}, count=${fvs.length}, first entry keys: ${JSON.stringify(Object.keys(fvs[0]))}`);
+              debug(`First entry sample: ${JSON.stringify(fvs[0])}`);
+            }
+            const did = String(d.id);
+            for (const fv of fvs) {
+              const cfId = String(fv.customFieldId ?? fv.dealCustomFieldMetumId ?? '');
+              const val = String(fv.fieldValue ?? '').trim();
+              if (cfId === eventFieldId) eventByDealId[did] = val;
+              else if (cfId === linkedinFieldId) linkedinByDealId[did] = val;
+              else if (cfId === linkedinDateFieldId) linkedinDateByDealId[did] = val;
+            }
+          } catch (e) {
+            // skip this deal on error
+          }
+        },
+        FETCH_CONCURRENCY,
+        (done, total) => {
+          const pct = 30 + Math.round((done / total) * 50);
+          setLoading(true, `Loading custom field values… ${done}/${total}`, pct);
+        }
+      );
+
+      debug(`Per-deal field fetch complete. Deals with event: ${Object.keys(eventByDealId).length}, with linkedin: ${Object.keys(linkedinByDealId).length}, with linkedin date: ${Object.keys(linkedinDateByDealId).length}`);
+
+      const dealsForSequence = deals.map(d => ({
+        id: String(d.id),
+        ownerId: String(d.owner || ''),
+        contactId: String(d.contact || ''),
+        eventName: eventByDealId[String(d.id)] || null,
+        linkedinValue: linkedinByDealId[String(d.id)] || null,
+        linkedinDate: linkedinDateByDealId[String(d.id)] || null,
+        day0Date: null,
+      }));
+
+      // 5) Filter to deals with a valid event AND linkedin = Yes
+      setLoading(true, 'Filtering candidates…', 32);
+      debug(`Loaded ${dealsForSequence.length} deals from pipeline ${PIPELINE_ID}.`);
+
+      // Diagnostic: count deals at each filter gate
+      const withEvent = dealsForSequence.filter(d => d.eventName).length;
+      const withValidEvent = dealsForSequence.filter(d => d.eventName && VALID_EVENTS.has(d.eventName)).length;
+      const withYes = dealsForSequence.filter(d => d.linkedinValue && d.linkedinValue.toLowerCase() === 'yes').length;
+      const withBoth = dealsForSequence.filter(d =>
+        d.eventName && VALID_EVENTS.has(d.eventName) &&
+        d.linkedinValue && d.linkedinValue.toLowerCase() === 'yes'
+      ).length;
+      debug(`Filter funnel:`);
+      console.log(`  - Deals with any event value: ${withEvent}`);
+      console.log(`  - Deals with VALID event value (in approved list): ${withValidEvent}`);
+      console.log(`  - Deals with LinkedIn = Yes: ${withYes}`);
+      console.log(`  - Deals passing both gates (candidates): ${withBoth}`);
+      // Show a few sample values to spot mismatches
+      const sampleEvents = [...new Set(dealsForSequence.map(d => d.eventName).filter(Boolean))].slice(0, 10);
+      const sampleLinkedinVals = [...new Set(dealsForSequence.map(d => d.linkedinValue).filter(Boolean))];
+      console.log(`  Sample event values seen:`, sampleEvents);
+      console.log(`  Distinct LinkedIn values seen:`, sampleLinkedinVals);
+
+      const candidates = dealsForSequence.filter(d => {
+        if (!d.eventName || !VALID_EVENTS.has(d.eventName)) return false;
+        if (!d.linkedinValue || d.linkedinValue.toLowerCase() !== 'yes') return false;
+        return true;
+      });
+
+      // 6) For each candidate, fetch deal logs and find the date the LinkedIn field was changed to "Yes"
+      // 6) For each candidate, read day-0 directly from the LinkedIn Sent Date field.
+      // This is set by an AC automation when the LinkedIn radio button flips to Yes,
+      // and backfilled manually for deals that were already in-sequence.
+      // No per-deal API calls needed.
+      setLoading(true, 'Reading LinkedIn Sent Dates…', 50);
+
+      let day0FoundCount = 0;
+      const distinctDateFormats = new Set();
+      candidates.forEach(d => {
+        if (!d.linkedinDate) return;
+        distinctDateFormats.add(d.linkedinDate);
+        const dt = parseDateOnly(d.linkedinDate);
+        if (dt) {
+          d.day0Date = ymdKey(dt);
+          day0FoundCount++;
+        }
+      });
+
+      debug(`Day-0 detection: found dates for ${day0FoundCount} of ${candidates.length} candidates.`);
+      if (distinctDateFormats.size > 0) {
+        debug('Sample LinkedIn Sent Date values seen:', [...distinctDateFormats].slice(0, 10));
+      }
+
+      const finalDeals = candidates
+        .filter(d => d.day0Date)
+        .map(d => ({
+          id: d.id,
+          ownerId: d.ownerId,
+          eventName: d.eventName,
+          day0Date: d.day0Date,
+        }));
+
+      // Build reps map (only owners that actually have deals)
+      const ownerIds = new Set(finalDeals.map(d => d.ownerId).filter(Boolean));
+      const repsById = {};
+      ownerIds.forEach(id => {
+        if (userMap[id]) repsById[id] = userMap[id];
+        else repsById[id] = {
+          id, firstName: 'Unknown', lastName: '', email: '',
+          fullName: `User ${id}`, initials: '?',
+        };
+      });
+
+      // Assign event colors deterministically
+      const eventColors = {};
+      const eventNames = [...new Set(finalDeals.map(d => d.eventName))].sort();
+      eventNames.forEach((n, i) => { eventColors[n] = COLOR_PALETTE[i % COLOR_PALETTE.length]; });
+
+      const payload = {
+        deals: finalDeals,
+        repsById,
+        eventColors,
+        activeSequences: finalDeals.length,
+        cachedAt: Date.now(),
+      };
+
+      writeCache(payload);
+      applyData(payload);
+
+      setLoading(false);
+      showError('');
+    } catch (err) {
+      console.error(err);
+      debug('ERROR:', err.message || String(err));
+      if (err.stack) debug('STACK:', err.stack);
+      setLoading(false);
+      showError(`Failed to load data: ${err.message || err}`);
+    } finally {
+      document.getElementById('refreshBtn').disabled = false;
+      document.getElementById('refreshIcon').textContent = '↻';
+    }
+  }
+
+  function applyData(payload) {
+    state.deals = payload.deals || [];
+    state.repsById = payload.repsById || {};
+    state.eventColors = payload.eventColors || {};
+    state.activeSequences = payload.activeSequences || 0;
+    rebuildFilter();
+    render();
+  }
+
+  function readCache() {
+    try {
+      const raw = sessionStorage.getItem(STORAGE_CACHE);
+      if (!raw) return null;
+      const data = JSON.parse(raw);
+      if (!data || !Array.isArray(data.deals)) return null;
+      return data;
+    } catch (e) { return null; }
+  }
+  function writeCache(payload) {
+    try { sessionStorage.setItem(STORAGE_CACHE, JSON.stringify(payload)); }
+    catch (e) {}
+  }
+  function clearCache() {
+    try { sessionStorage.removeItem(STORAGE_CACHE); } catch (e) {}
+  }
+
+  // ---------- Send projection ----------
+  // Build a map: dateKey -> [{dealId, ownerId, eventName, emailLabel, breakup}]
+  function buildSendMap() {
+    const map = new Map();
+    for (const d of state.deals) {
+      const base = parseDateOnly(d.day0Date);
+      if (!base) continue;
+      for (const step of SEQUENCE) {
+        const dt = addDays(base, step.offset);
+        const key = ymdKey(dt);
+        if (!map.has(key)) map.set(key, []);
+        map.get(key).push({
+          dealId: d.id,
+          ownerId: d.ownerId,
+          eventName: d.eventName,
+          emailLabel: step.label,
+          breakup: step.breakup,
+        });
+      }
+    }
+    return map;
+  }
+
+  function applyFilter(sends) {
+    if (state.filter === 'all') return sends;
+    if (state.filter.startsWith('rep:')) {
+      const rid = state.filter.slice(4);
+      return sends.filter(s => s.ownerId === rid);
+    }
+    if (state.filter.startsWith('event:')) {
+      const ev = state.filter.slice(6);
+      return sends.filter(s => s.eventName === ev);
+    }
+    return sends;
+  }
+
+  // ---------- Filter dropdown ----------
+  function rebuildFilter() {
+    const sel = document.getElementById('filterSelect');
+    const prior = state.filter;
+    sel.innerHTML = '';
+
+    const optAll = document.createElement('option');
+    optAll.value = 'all';
+    optAll.textContent = 'All reps';
+    sel.appendChild(optAll);
+
+    // Reps with deals, sorted by first name
+    const reps = Object.values(state.repsById).slice().sort((a, b) =>
+      (a.firstName || a.fullName).localeCompare(b.firstName || b.fullName)
+    );
+    if (reps.length) {
+      const og = document.createElement('optgroup');
+      og.label = 'Reps';
+      reps.forEach(r => {
+        const o = document.createElement('option');
+        o.value = `rep:${r.id}`;
+        o.textContent = r.firstName || r.fullName;
+        og.appendChild(o);
+      });
+      sel.appendChild(og);
+    }
+
+    // Events with active deals
+    const eventNames = [...new Set(state.deals.map(d => d.eventName))].sort();
+    if (eventNames.length) {
+      const og = document.createElement('optgroup');
+      og.label = 'Events';
+      eventNames.forEach(n => {
+        const o = document.createElement('option');
+        o.value = `event:${n}`;
+        o.textContent = `Event: ${n.split(' | ')[0]}`;
+        og.appendChild(o);
+      });
+      sel.appendChild(og);
+    }
+
+    // Restore prior selection if still valid
+    let found = false;
+    Array.from(sel.options).forEach(opt => {
+      if (opt.value === prior) found = true;
+    });
+    sel.value = found ? prior : 'all';
+    state.filter = sel.value;
+  }
+
+  // ---------- Render ----------
+  function render() {
+    renderCalendar();
+    renderStats();
+    if (state.selectedDateKey) renderDayPanel(state.selectedDateKey);
+  }
+
+  function renderStats() {
+    const sendMap = buildSendMap();
+    const monthStart = new Date(state.viewYear, state.viewMonth, 1);
+    const monthEnd = new Date(state.viewYear, state.viewMonth + 1, 0);
+
+    let monthTotal = 0;
+    let peakCount = 0;
+    let peakDateKey = null;
+    let overloadDays = 0;
+
+    for (let d = new Date(monthStart); d <= monthEnd; d = addDays(d, 1)) {
+      const key = ymdKey(d);
+      const all = sendMap.get(key) || [];
+      const filtered = applyFilter(all);
+      monthTotal += filtered.length;
+      if (filtered.length > peakCount) {
+        peakCount = filtered.length;
+        peakDateKey = key;
+      }
+      // Overload: any rep on this day with >= threshold sends
+      const byRep = {};
+      // For overload, always evaluate against "all" view rep loads
+      // (an overload day is a day where any rep has >=125, regardless of filter)
+      for (const s of all) {
+        byRep[s.ownerId] = (byRep[s.ownerId] || 0) + 1;
+      }
+      const isOverload = Object.values(byRep).some(c => c >= OVERLOAD_THRESHOLD);
+      if (isOverload) overloadDays++;
+    }
+
+    document.getElementById('statSends').textContent = monthTotal.toLocaleString();
+    document.getElementById('statSendsSub').textContent =
+      `in ${fmtMonth(state.viewYear, state.viewMonth)}`;
+
+    if (peakDateKey && peakCount > 0) {
+      const dt = parseDateOnly(peakDateKey);
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      document.getElementById('statPeak').textContent = peakCount.toLocaleString();
+      document.getElementById('statPeakSub').textContent = `${months[dt.getMonth()]} ${dt.getDate()}`;
+    } else {
+      document.getElementById('statPeak').textContent = '0';
+      document.getElementById('statPeakSub').innerHTML = '&nbsp;';
+    }
+
+    const overloadEl = document.getElementById('statOverload');
+    overloadEl.textContent = overloadDays.toLocaleString();
+    document.getElementById('statOverloadCard').classList.toggle('warn', overloadDays > 0);
+
+    document.getElementById('statActive').textContent = state.activeSequences.toLocaleString();
+  }
+
+  function renderCalendar() {
+    document.getElementById('calMonth').textContent = fmtMonth(state.viewYear, state.viewMonth);
+
+    const grid = document.getElementById('calGrid');
+    grid.innerHTML = '';
+
+    const sendMap = buildSendMap();
+
+    const firstOfMonth = new Date(state.viewYear, state.viewMonth, 1);
+    const startWeekday = firstOfMonth.getDay(); // 0..6, Sun=0
+    const gridStart = addDays(firstOfMonth, -startWeekday);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // 6 rows × 7 = 42 cells
+    for (let i = 0; i < 42; i++) {
+      const date = addDays(gridStart, i);
+      const key = ymdKey(date);
+      const isOtherMonth = date.getMonth() !== state.viewMonth;
+      const allSends = sendMap.get(key) || [];
+      const filtered = applyFilter(allSends);
+
+      const cell = document.createElement('div');
+      cell.className = 'day';
+      if (isOtherMonth) cell.classList.add('other-month');
+      if (date.getTime() === today.getTime()) cell.classList.add('today');
+      if (key === state.selectedDateKey) cell.classList.add('selected');
+      cell.dataset.dateKey = key;
+
+      const header = document.createElement('div');
+      header.className = 'day-header';
+
+      const dnum = document.createElement('span');
+      dnum.className = 'day-num';
+      dnum.textContent = date.getDate();
+      header.appendChild(dnum);
+
+      const dcount = document.createElement('span');
+      dcount.className = 'day-count' + (filtered.length === 0 ? ' zero' : '');
+      dcount.textContent = filtered.length > 0 ? filtered.length : '';
+      header.appendChild(dcount);
+
+      cell.appendChild(header);
+
+      // Event dots (filtered set)
+      const eventCounts = {};
+      filtered.forEach(s => {
+        eventCounts[s.eventName] = (eventCounts[s.eventName] || 0) + 1;
+      });
+      const dots = document.createElement('div');
+      dots.className = 'day-events';
+      const sortedEvents = Object.keys(eventCounts).sort((a, b) => eventCounts[b] - eventCounts[a]);
+      sortedEvents.slice(0, 6).forEach(ev => {
+        const d = document.createElement('div');
+        d.className = 'event-dot';
+        d.style.background = state.eventColors[ev] || '#999';
+        d.title = `${ev}: ${eventCounts[ev]}`;
+        dots.appendChild(d);
+      });
+      cell.appendChild(dots);
+
+      // Overload flag (based on unfiltered loads — always reflects real rep load)
+      const byRep = {};
+      allSends.forEach(s => { byRep[s.ownerId] = (byRep[s.ownerId] || 0) + 1; });
+      const isOverload = Object.values(byRep).some(c => c >= OVERLOAD_THRESHOLD);
+      if (isOverload) {
+        const flag = document.createElement('div');
+        flag.className = 'overload-flag';
+        flag.title = 'A rep has 125+ projected sends on this day';
+        cell.appendChild(flag);
+      }
+
+      cell.addEventListener('click', () => {
+        state.selectedDateKey = key;
+        // Re-render to update selection highlight
+        renderCalendar();
+        renderDayPanel(key);
+      });
+
+      grid.appendChild(cell);
+    }
+  }
+
+  function renderDayPanel(dateKey) {
+    const panel = document.getElementById('dayPanel');
+    const dt = parseDateOnly(dateKey);
+    if (!dt) { panel.classList.remove('show'); return; }
+
+    const sendMap = buildSendMap();
+    const allSends = sendMap.get(dateKey) || [];
+    const filtered = applyFilter(allSends);
+
+    panel.innerHTML = '';
+    panel.classList.add('show');
+
+    // Header
+    const head = document.createElement('div');
+    head.className = 'day-panel-header';
+    const left = document.createElement('div');
+    const h2 = document.createElement('h2');
+    h2.textContent = fmtFullDate(dt);
+    const total = document.createElement('div');
+    total.className = 'total';
+    total.textContent = `${filtered.length} projected send${filtered.length === 1 ? '' : 's'}`;
+    left.appendChild(h2);
+    left.appendChild(total);
+    head.appendChild(left);
+
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'day-panel-close';
+    closeBtn.textContent = '✕';
+    closeBtn.title = 'Close';
+    closeBtn.addEventListener('click', () => {
+      state.selectedDateKey = null;
+      panel.classList.remove('show');
+      renderCalendar();
+    });
+    head.appendChild(closeBtn);
+    panel.appendChild(head);
+
+    if (filtered.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'day-panel-empty';
+      empty.textContent = 'No sends in this period.';
+      panel.appendChild(empty);
+      return;
+    }
+
+    // Group by rep
+    const byRep = {};
+    filtered.forEach(s => {
+      if (!byRep[s.ownerId]) byRep[s.ownerId] = [];
+      byRep[s.ownerId].push(s);
+    });
+
+    // Compute the overload set against unfiltered counts
+    const allByRep = {};
+    allSends.forEach(s => {
+      if (!allByRep[s.ownerId]) allByRep[s.ownerId] = 0;
+      allByRep[s.ownerId]++;
+    });
+
+    const repIds = Object.keys(byRep).sort((a, b) => byRep[b].length - byRep[a].length);
+
+    repIds.forEach(rid => {
+      const rep = state.repsById[rid] || {
+        id: rid, fullName: `User ${rid}`, firstName: '', lastName: '', initials: '?',
+      };
+      const rsends = byRep[rid];
+      const overloaded = (allByRep[rid] || 0) >= OVERLOAD_THRESHOLD;
+
+      const row = document.createElement('div');
+      row.className = 'rep-row' + (overloaded ? ' warn' : '');
+
+      const av = document.createElement('div');
+      av.className = 'rep-avatar';
+      av.style.background = state.eventColors[rsends[0].eventName] || 'var(--purple)';
+      av.textContent = rep.initials || '?';
+      row.appendChild(av);
+
+      const info = document.createElement('div');
+      info.className = 'rep-info';
+      const nm = document.createElement('div');
+      nm.className = 'rep-name';
+      nm.textContent = rep.fullName;
+      if (overloaded) {
+        const wb = document.createElement('span');
+        wb.className = 'rep-warn';
+        wb.textContent = `${allByRep[rid]} sends`;
+        nm.appendChild(wb);
+      }
+      info.appendChild(nm);
+
+      const meta = document.createElement('div');
+      meta.className = 'rep-meta';
+      meta.textContent = `${rsends.length} send${rsends.length === 1 ? '' : 's'} on this day` +
+        (overloaded && state.filter !== 'all' && !state.filter.startsWith(`rep:${rid}`)
+          ? ` · ${allByRep[rid]} total across all events`
+          : '');
+      info.appendChild(meta);
+
+      // Email pills, grouped by label
+      const byLabel = {};
+      rsends.forEach(s => {
+        const k = s.emailLabel;
+        if (!byLabel[k]) byLabel[k] = { count: 0, breakup: s.breakup };
+        byLabel[k].count++;
+      });
+      const pillRow = document.createElement('div');
+      pillRow.className = 'pill-row';
+      Object.keys(byLabel)
+        .sort((a, b) => SEQUENCE.findIndex(s => s.label === a) - SEQUENCE.findIndex(s => s.label === b))
+        .forEach(label => {
+          const p = document.createElement('span');
+          p.className = 'pill' + (byLabel[label].breakup ? ' breakup' : '');
+          p.innerHTML = `${label} · <span class="pill-count">${byLabel[label].count}</span>`;
+          pillRow.appendChild(p);
+        });
+      info.appendChild(pillRow);
+
+      // Event tags
+      const evCounts = {};
+      rsends.forEach(s => { evCounts[s.eventName] = (evCounts[s.eventName] || 0) + 1; });
+      const tagRow = document.createElement('div');
+      tagRow.className = 'event-tags';
+      Object.keys(evCounts).sort().forEach(ev => {
+        const t = document.createElement('span');
+        t.className = 'event-tag';
+        const dot = document.createElement('span');
+        dot.className = 'event-dot';
+        dot.style.background = state.eventColors[ev] || '#999';
+        t.appendChild(dot);
+        const txt = document.createElement('span');
+        txt.textContent = `${ev.split(' | ')[0]} · ${evCounts[ev]}`;
+        t.appendChild(txt);
+        tagRow.appendChild(t);
+      });
+      info.appendChild(tagRow);
+
+      row.appendChild(info);
+      panel.appendChild(row);
+    });
+  }
+
+  // ---------- Wiring ----------
+  function initApp() {
+    const now = new Date();
+    state.viewYear = now.getFullYear();
+    state.viewMonth = now.getMonth();
+
+    document.getElementById('prevMonth').addEventListener('click', () => {
+      state.viewMonth--;
+      if (state.viewMonth < 0) { state.viewMonth = 11; state.viewYear--; }
+      state.selectedDateKey = null;
+      document.getElementById('dayPanel').classList.remove('show');
+      render();
+    });
+    document.getElementById('nextMonth').addEventListener('click', () => {
+      state.viewMonth++;
+      if (state.viewMonth > 11) { state.viewMonth = 0; state.viewYear++; }
+      state.selectedDateKey = null;
+      document.getElementById('dayPanel').classList.remove('show');
+      render();
+    });
+    document.getElementById('todayBtn').addEventListener('click', () => {
+      const t = new Date();
+      state.viewYear = t.getFullYear();
+      state.viewMonth = t.getMonth();
+      state.selectedDateKey = ymdKey(t);
+      render();
+      renderDayPanel(state.selectedDateKey);
+    });
+    document.getElementById('filterSelect').addEventListener('change', (e) => {
+      state.filter = e.target.value;
+      render();
+    });
+    document.getElementById('refreshBtn').addEventListener('click', () => {
+      clearCache();
+      loadAll(true);
+    });
+
+    loadAll(false);
+  }
+
+  // ---------- Password gate ----------
+  function tryAuth() {
+    const pw = document.getElementById('gatePw').value;
+    const card = document.getElementById('gateCard');
+    const err = document.getElementById('gateError');
+    if (pw === PASSWORD) {
+      sessionStorage.setItem(STORAGE_AUTH, '1');
+      document.getElementById('gate').style.display = 'none';
+      document.getElementById('app').classList.add('show');
+      initApp();
+    } else {
+      err.classList.add('show');
+      card.classList.remove('shake');
+      // force reflow to restart animation
+      void card.offsetWidth;
+      card.classList.add('shake');
+      document.getElementById('gatePw').select();
+    }
+  }
+
+  document.getElementById('gateBtn').addEventListener('click', tryAuth);
+  document.getElementById('gatePw').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') tryAuth();
+  });
+
+  // Auto-pass if previously authed in this session
+  if (sessionStorage.getItem(STORAGE_AUTH) === '1') {
+    document.getElementById('gate').style.display = 'none';
+    document.getElementById('app').classList.add('show');
+    initApp();
+  }
+})();
+</script>
+</body>
+</html>
